@@ -119,8 +119,8 @@ class Address(ModelSQL, ModelView):
 
     registration_form = RegistrationForm
 
-    email = fields.Char('Email')
-    phone = fields.Char('Phone')
+    #~ email = fields.Char('Email')
+    #~ phone = fields.Char('Phone')
 
     @classmethod
     @login_required
