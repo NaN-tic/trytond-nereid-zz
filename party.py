@@ -75,8 +75,8 @@ class AddressForm(Form):
     city = TextField(_('City'), [validators.Required(), ])
     country = SelectField(_('Country'), [validators.Required(), ], coerce=int)
     subdivision = IntegerField(_('State/County'), [validators.Required()])
-    email = TextField(_('Email'))
-    phone = TextField(_('Phone'))
+    #~ email = TextField(_('Email'))
+    #~ phone = TextField(_('Phone'))
 
 
 class NewPasswordForm(Form):
@@ -151,8 +151,8 @@ class Address(ModelSQL, ModelView):
                     'city': form.city.data,
                     'country': form.country.data,
                     'subdivision': form.subdivision.data,
-                    'email': form.email.data,
-                    'phone': form.phone.data,
+                    #~ 'email': form.email.data,
+                    #~ 'phone': form.phone.data,
                 })
             else:
                 cls.create([{
@@ -164,8 +164,8 @@ class Address(ModelSQL, ModelView):
                     'country': form.country.data,
                     'subdivision': form.subdivision.data,
                     'party': request.nereid_user.party.id,
-                    'email': form.email.data,
-                    'phone': form.phone.data,
+                    #~ 'email': form.email.data,
+                    #~ 'phone': form.phone.data,
                 }])
             return redirect(url_for('party.address.view_address'))
         elif request.method == 'GET' and address:
@@ -179,8 +179,8 @@ class Address(ModelSQL, ModelView):
                 city=address.city,
                 country=address.country and address.country.id,
                 subdivision=address.subdivision and address.subdivision.id,
-                email=address.email,
-                phone=address.phone
+                #~ email=address.email,
+                #~ phone=address.phone
             )
             form.country.choices = countries
         return render_template('address-edit.jinja', form=form, address=address)
