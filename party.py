@@ -22,11 +22,13 @@ from nereid.globals import session, current_app
 from nereid.signals import registration
 from nereid.templating import render_email
 from trytond.model import ModelView, ModelSQL, fields
-from trytond.pool import Pool
+from trytond.pool import Pool, PoolMeta
 from trytond.pyson import Eval, Bool, Not
 from trytond.transaction import Transaction
 from trytond.config import CONFIG
 from trytond.tools import get_smtp_server
+from trytond import backend
+from sql import As, Literal, Column
 
 from .i18n import _, get_translations
 
@@ -75,8 +77,8 @@ class AddressForm(Form):
     city = TextField(_('City'), [validators.Required(), ])
     country = SelectField(_('Country'), [validators.Required(), ], coerce=int)
     subdivision = IntegerField(_('State/County'), [validators.Required()])
-    #~ email = TextField(_('Email'))
-    #~ phone = TextField(_('Phone'))
+    email = TextField(_('Email'))
+    phone = TextField(_('Phone'))
 
 
 class NewPasswordForm(Form):
@@ -113,14 +115,14 @@ STATES = {
 }
 
 
-class Address(ModelSQL, ModelView):
-    """Party Address"""
+class Address:
     __name__ = 'party.address'
+    __metaclass__ = PoolMeta
 
     registration_form = RegistrationForm
 
-    #~ email = fields.Char('Email')
-    #~ phone = fields.Char('Phone')
+    #~ phone = fields.Function(fields.Char('Phone'), 'get_address_mechanism')
+    #~ email = fields.Function(fields.Char('E-Mail'), 'get_address_mechanism')
 
     @classmethod
     @login_required
@@ -134,6 +136,8 @@ class Address(ModelSQL, ModelView):
 
         :param address: ID of the address
         """
+        pool = Pool()
+        ContactMechanism = pool.get('party.contact_mechanism')
         form = AddressForm(request.form, name=request.nereid_user.display_name)
         countries = [
             (c.id, c.name) for c in request.nereid_website.countries
@@ -142,8 +146,11 @@ class Address(ModelSQL, ModelView):
         if address not in (a.id for a in request.nereid_user.party.addresses):
             address = None
         if request.method == 'POST' and form.validate():
+            mechanisms_create = []
+            party = request.nereid_user.party
             if address is not None:
-                cls.write([cls(address)], {
+                address = cls(address)
+                cls.write([address], {
                     'name': form.name.data,
                     'street': form.street.data,
                     'streetbis': form.streetbis.data,
@@ -151,11 +158,9 @@ class Address(ModelSQL, ModelView):
                     'city': form.city.data,
                     'country': form.country.data,
                     'subdivision': form.subdivision.data,
-                    #~ 'email': form.email.data,
-                    #~ 'phone': form.phone.data,
                 })
             else:
-                cls.create([{
+                address, = cls.create([{
                     'name': form.name.data,
                     'street': form.street.data,
                     'streetbis': form.streetbis.data,
@@ -163,10 +168,42 @@ class Address(ModelSQL, ModelView):
                     'city': form.city.data,
                     'country': form.country.data,
                     'subdivision': form.subdivision.data,
-                    'party': request.nereid_user.party.id,
-                    #~ 'email': form.email.data,
-                    #~ 'phone': form.phone.data,
+                    'party': party.id,
                 }])
+            if form.email.data:
+                contact_mechanisms = ContactMechanism.search([
+                        ('address', '=', address.id),
+                        ('type', '=', 'email'),
+                        ], limit=1)
+                if contact_mechanisms:
+                    ContactMechanism.write(contact_mechanisms, {
+                        'value': form.email.data,
+                        })
+                else:
+                    mechanisms_create.append({
+                        'party': request.nereid_user.party.id,
+                        'address': address.id,
+                        'type': 'email',
+                        'value': form.email.data,
+                    })
+            if form.phone.data:
+                contact_mechanisms = ContactMechanism.search([
+                        ('address', '=', address.id),
+                        ('type', '=', 'phone'),
+                        ], limit=1)
+                if contact_mechanisms:
+                    ContactMechanism.write(contact_mechanisms, {
+                        'value': form.phone.data,
+                        })
+                else:
+                    mechanisms_create.append({
+                        'party': request.nereid_user.party.id,
+                        'address': address.id,
+                        'type': 'phone',
+                        'value': form.phone.data,
+                    })
+            if mechanisms_create:
+                ContactMechanism.create(mechanisms_create)
             return redirect(url_for('party.address.view_address'))
         elif request.method == 'GET' and address:
             # Its an edit of existing address, prefill data
@@ -179,8 +216,8 @@ class Address(ModelSQL, ModelView):
                 city=address.city,
                 country=address.country and address.country.id,
                 subdivision=address.subdivision and address.subdivision.id,
-                #~ email=address.email,
-                #~ phone=address.phone
+                email=address.email,
+                phone=address.phone
             )
             form.country.choices = countries
         return render_template('address-edit.jinja', form=form, address=address)
